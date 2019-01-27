@@ -8,7 +8,7 @@
 
 #####################################################
 # TASK 1 -- Ensure petlib is installed on the System
-#           and also pytest. Ensure the Lab Code can 
+#           and also pytest. Ensure the Lab Code can
 #           be imported.
 
 import pytest
@@ -23,21 +23,21 @@ except:
 @pytest.mark.task1
 def test_petlib_present():
     """
-    Try to import Petlib and pytest to ensure they are 
-    present on the system, and accessible to the python 
+    Try to import Petlib and pytest to ensure they are
+    present on the system, and accessible to the python
     environment
     """
-    import petlib 
+    import petlib
     import pytest
     assert True
 
 @pytest.mark.task1
 def test_code_present():
     """
-    Try to import the code file. 
+    Try to import the code file.
     This is where the lab answers will be.
     """
-    import Lab02Code 
+    import Lab02Code
     assert True
 
 #####################################################
@@ -83,7 +83,7 @@ def test_Alice_message_overlong():
 
     with raises(Exception) as excinfo:
         mix_client_one_hop(public_key, urandom(1000), b"Dear Alice,\nHello!\nBob")
-    
+
     with raises(Exception) as excinfo:
         mix_client_one_hop(public_key, b"Alice", urandom(10000))
 
@@ -91,7 +91,7 @@ def test_Alice_message_overlong():
 @pytest.mark.task2
 def test_simple_client_part_type(encode_Alice_message):
     private_key, Alice_message = encode_Alice_message
-    
+
     # Ensure the client encodes a NamedTuple of type "OneHopMixMessage"
     assert isinstance(Alice_message, tuple)
     assert len(Alice_message) == 4
@@ -104,7 +104,7 @@ def test_simple_client_part_type(encode_Alice_message):
 def test_simple_client_decode(encode_Alice_message):
     private_key, Alice_message = encode_Alice_message
 
-    # Ensure the mix can decode the message correctly    
+    # Ensure the mix can decode the message correctly
     res1 = mix_server_one_hop(private_key, [Alice_message])
 
     assert len(res1) == 1
@@ -113,7 +113,7 @@ def test_simple_client_decode(encode_Alice_message):
 
 @pytest.mark.task2
 def test_simple_client_decode_many():
-    
+
     from os import urandom
 
     G = EcGroup()
@@ -128,7 +128,7 @@ def test_simple_client_decode_many():
         m = mix_client_one_hop(public_key, urandom(256), urandom(1000))
         messages += [m]
 
-    # Ensure the mix can decode the message correctly    
+    # Ensure the mix can decode the message correctly
     res1 = mix_server_one_hop(private_key, messages)
 
     assert len(res1) == 100
@@ -211,4 +211,3 @@ def test_trace_variable():
     TA_friends = analyze_trace(trace, len(friends))
     assert len(TA_friends) == len(friends)
     assert sorted(TA_friends) == sorted(friends)
-
