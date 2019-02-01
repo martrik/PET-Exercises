@@ -279,8 +279,9 @@ def mix_client_n_hop(public_keys, address, message):
     key_materials = []
 
     """
-    We need to precompute the private keys  that we're going to be use considering
-    the Blinding Factor
+    We need to precompute the private keys that we're going to be use considering
+    the Blinding Factor. Encryption is back to front but Blinding factor is front to back,
+    that's why we need to do this in advance.
     """
     for pk_i, public_key in enumerate(public_keys):
         shared_element = private_key *  public_key
@@ -293,7 +294,7 @@ def mix_client_n_hop(public_keys, address, message):
         private_key *= blinding_factor
 
     """
-    Iterate list in reverse order so that encryption happens in FILO fashion
+    Iterate list back to front so that encryption happens in FILO fashion
     """
     for i, public_key in enumerate(reversed(public_keys)):
         shared_element = private_key * public_key
@@ -374,18 +375,45 @@ def analyze_trace(trace, target_number_of_friends, target=0):
     friends of the target.
     """
 
-    ## ADD CODE HERE
+    receivers_count = {}
 
-    return []
+    for r in trace:
+        (senders, receivers) = r
+        if target in senders:
+            for receiver in receivers:
+                receivers_count[receiver] = 1 if receiver not in receivers_count else receivers_count[receiver] + 1
+
+    return map(lambda x: x[0], sorted(receivers_count.items(), key=lambda x: x[1])[-target_number_of_friends:])
 
 ## TASK Q1 (Question 1): The mix packet format you worked on uses AES-CTR with an IV set to all zeros.
 #                        Explain whether this is a security concern and justify your answer.
 
-""" TODO: Your answer HERE """
+"""
+There's two security concerns that arise from using a fixed IV in AES-CTR:
+
+1. Two identical plaintexts are going to have the same ciphertexts. Thus, an attacker can
+know when a client is sending the same message more than once.
+
+2. Attackers have a real chance at decrypting messages, which is the biggest possible security
+concern. CTR can be boiled down to C = P XOR F(K, IV), where C = ciphertext, P = plaintext, K = key.
+Given two ciphertexts C_1 and C_2 and a static IV, an attacker is able to know:
+
+C_1 XOR C_2 = P_1 XOR P_2
+
+Now that the attacker knows P_1 XOR P_2 s/he can just start a crib-dragging attack. This won't
+allow the attacker to learn about the plaintexts to 100% certainty. However, throw guessing and trial and
+error s/he might be able to have a real chance at learning about parts of the plaintexts, eventually even
+their entirety.
+
+Both issues can be easily solved by using a random IV for every message.
+"""
 
 
 ## TASK Q2 (Question 2): What assumptions does your implementation of the Statistical Disclosure Attack
 #                        makes about the distribution of traffic from non-target senders to receivers? Is
 #                        the correctness of the result returned dependent on this background distribution?
 
-""" TODO: Your answer HERE """
+"""
+The implemented solution assumes that non-target senders are selecting .
+Given that assumption we can guess that the target's friends will experience a
+"""
