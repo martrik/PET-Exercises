@@ -13,11 +13,12 @@
 #
 
 ###########################
-# Group Members: TODO
+# Group Members: Marti Serra
 ###########################
 
 
 from petlib.ec import EcGroup
+from random import randint
 
 def setup():
     """Generates the Cryptosystem Parameters."""
@@ -30,8 +31,9 @@ def setup():
 def keyGen(params):
    """ Generate a private / public key pair """
    (G, g, h, o) = params
-   
-   # ADD CODE HERE
+
+   priv = o.random()
+   pub = g.pt_mul(priv);
 
    return (priv, pub)
 
@@ -40,7 +42,10 @@ def encrypt(params, pub, m):
     if not -100 < m < 100:
         raise Exception("Message value to low or high.")
 
-   # ADD CODE HERE
+    G, g, h, o = params
+    k = o.random()
+
+    c = (g.pt_mul(k), k * pub + h.pt_mul(m))
 
     return c
 
@@ -75,54 +80,57 @@ def decrypt(params, priv, ciphertext):
     assert isCiphertext(params, ciphertext)
     a , b = ciphertext
 
-   # ADD CODE HERE
+    hm = ciphertext[1] - ciphertext[0].pt_mul(priv)
 
     return logh(params, hm)
 
 #####################################################
 # TASK 2 -- Define homomorphic addition and
 #           multiplication with a public value
-# 
+#
 
 def add(params, pub, c1, c2):
-    """ Given two ciphertexts compute the ciphertext of the 
+    """ Given two ciphertexts compute the ciphertext of the
         sum of their plaintexts.
     """
     assert isCiphertext(params, c1)
     assert isCiphertext(params, c2)
 
-   # ADD CODE HERE
+    c3 = ((c1[0] + c2[0]), (c1[1] + c2[1]))
 
     return c3
 
 def mul(params, pub, c1, alpha):
-    """ Given a ciphertext compute the ciphertext of the 
+    """ Given a ciphertext compute the ciphertext of the
         product of the plaintext time alpha """
     assert isCiphertext(params, c1)
 
-   # ADD CODE HERE
+    c3 = (c1[0].pt_mul(alpha), c1[1].pt_mul(alpha))
 
     return c3
 
 #####################################################
 # TASK 3 -- Define Group key derivation & Threshold
-#           decryption. Assume an honest but curious 
+#           decryption. Assume an honest but curious
 #           set of authorities.
 
 def groupKey(params, pubKeys=[]):
     """ Generate a group public key from a list of public keys """
     (G, g, h, o) = params
 
-   # ADD CODE HERE
+    pub = pubKeys[0]
+    for pubKey in pubKeys[1:]:
+        pub += pubKey
 
     return pub
 
 def partialDecrypt(params, priv, ciphertext, final=False):
-    """ Given a ciphertext and a private key, perform partial decryption. 
+    """ Given a ciphertext and a private key, perform partial decryption.
         If final is True, then return the plaintext. """
     assert isCiphertext(params, ciphertext)
-    
-    # ADD CODE HERE
+
+    a1, b = ciphertext
+    b1 = b - a1.pt_mul(priv)
 
     if final:
         return logh(params, b1)
@@ -135,14 +143,19 @@ def partialDecrypt(params, priv, ciphertext, final=False):
 #
 
 def corruptPubKey(params, priv, OtherPubKeys=[]):
-    """ Simulate the operation of a corrupt decryption authority. 
+    """ Simulate the operation of a corrupt decryption authority.
         Given a set of public keys from other authorities return a
         public key for the corrupt authority that leads to a group
         public key corresponding to a private key known to the
         corrupt authority. """
     (G, g, h, o) = params
-    
-   # ADD CODE HERE
+
+    # Calculate g^(o1, .., o^n)/g^(o1, .., o^n)*g^priv
+    pub = -OtherPubKeys[0]
+    for pubKey in OtherPubKeys[1:]:
+        pub -= pubKey
+
+    pub += g.pt_mul(priv)
 
     return pub
 
@@ -157,7 +170,8 @@ def encode_vote(params, pub, vote):
         zero and the votes for one."""
     assert vote in [0, 1]
 
-   # ADD CODE HERE
+    v0 = encrypt(params, pub, not vote)
+    v1 = encrypt(params, pub, vote)
 
     return (v0, v1)
 
@@ -165,8 +179,11 @@ def process_votes(params, pub, encrypted_votes):
     """ Given a list of encrypted votes tally them
         to sum votes for zeros and votes for ones. """
     assert isinstance(encrypted_votes, list)
-    
-   # ADD CODE HERE
+
+    tv0, tv1 = encrypted_votes[0]
+    for (e0, e1) in encrypted_votes[1:]:
+        tv0 = add(params, pub, tv0, e0)
+        tv1 = add(params, pub, tv1, e1)
 
     return tv0, tv1
 
@@ -206,7 +223,7 @@ def simulate_poll(votes):
 ###########################################################
 # TASK Q1 -- Answer questions regarding your implementation
 #
-# Consider the following game between an adversary A and honest users H1 and H2: 
+# Consider the following game between an adversary A and honest users H1 and H2:
 # 1) H1 picks 3 plaintext integers Pa, Pb, Pc arbitrarily, and encrypts them to the public
 #    key of H2 using the scheme you defined in TASK 1.
 # 2) H1 provides the ciphertexts Ca, Cb and Cc to H2 who flips a fair coin b.
@@ -214,18 +231,39 @@ def simulate_poll(votes):
 #    In case b=1 then H2 homomorphically computes C as the encryption of Pb plus Pc.
 # 3) H2 provides the adversary A, with Ca, Cb, Cc and C.
 #
-# What is the advantage of the adversary in guessing b given your implementation of 
+# What is the advantage of the adversary in guessing b given your implementation of
 # Homomorphic addition? What are the security implications of this?
 
-""" Your Answer here """
+"""
+The adversary is able to find out the value of b by calculating whether
+C = Ca + Cb or C = Cb + Cc. That's because my implementation doesn't include
+any randomness in the final result; i.e. it is deterministic instead of probabilistic.
+For it to be secure, there should be different possible ciphertexts for the same two
+arguments passed to the Homomorphic addition function.
+"""
 
 ###########################################################
 # TASK Q2 -- Answer questions regarding your implementation
 #
 # Given your implementation of the private poll in TASK 5, how
 # would a malicious user implement encode_vote to (a) distrupt the
-# poll so that it yields no result, or (b) manipulate the poll so 
-# that it yields an arbitrary result. Can those malicious actions 
+# poll so that it yields no result, or (b) manipulate the poll so
+# that it yields an arbitrary result. Can those malicious actions
 # be detected given your implementation?
 
-""" Your Answer here """
+"""
+a) Use a different public key than the grouped one provided so that the final
+aggregate of votes won't be partially-decryptable by the authorities. For instance,
+reassigning the "pub" argument to:
+
+pub = params[1].pt_mul(params[3].random())
+
+
+b) Not respecting the method's `vote` argument and overwriting it with any
+desired value. For instace, if the malicious user wants 1s to win, the implementation
+can change the vote to 1 with 60% probability and to 0 with 40%.
+
+The method to achieve "a" will be detected as the decryption phase will fail. However,
+the current implementation can't detect "b" without compromising the privacy of voters.
+In order to detect such attack whilst maintaining privacy, commitments could be used.
+"""

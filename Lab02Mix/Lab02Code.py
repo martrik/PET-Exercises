@@ -294,7 +294,7 @@ def mix_client_n_hop(public_keys, address, message):
         private_key *= blinding_factor
 
     """
-    Iterate list back to front so that encryption happens in FILO fashion
+    Iterate list back to front so that encryption is done in correct order.
     """
     for i, public_key in enumerate(reversed(public_keys)):
         shared_element = private_key * public_key
@@ -394,16 +394,15 @@ There's two security concerns that arise from using a fixed IV in AES-CTR:
 1. Two identical plaintexts are going to have the same ciphertexts. Thus, an attacker can
 know when a client is sending the same message more than once.
 
-2. Attackers have a real chance at decrypting messages, which is the biggest possible security
-concern. CTR can be boiled down to C = P XOR F(K, IV), where C = ciphertext, P = plaintext, K = key.
+2. Attackers have a real chance at decrypting messages. CTR can be boiled down to
+C = P XOR F(K, IV), where C = ciphertext, P = plaintext, K = key.
 Given two ciphertexts C_1 and C_2 and a static IV, an attacker is able to know:
 
 C_1 XOR C_2 = P_1 XOR P_2
 
 Now that the attacker knows P_1 XOR P_2 s/he can just start a crib-dragging attack. This won't
-allow the attacker to learn about the plaintexts to 100% certainty. However, throw guessing and trial and
-error s/he might be able to have a real chance at learning about parts of the plaintexts, eventually even
-their entirety.
+allow the attacker to learn about the plaintexts with 100% certainty. However, through guessing and trial and
+error s/he might be able to decrypt parts of the plaintexts, eventually even their entirety.
 
 Both issues can be easily solved by using a random IV for every message.
 """
@@ -414,6 +413,10 @@ Both issues can be easily solved by using a random IV for every message.
 #                        the correctness of the result returned dependent on this background distribution?
 
 """
-The implemented solution assumes that non-target senders are selecting .
-Given that assumption we can guess that the target's friends will experience a
+The implemented solution assumes that non-target senders are selecting receivers in equal probability (i.e. they
+have no "friends"). If all senders also had a small group of corresponding receivers, the implemented algorithm
+would not return correct results in some situations. For instace, if a non-target sender with a small group of potential
+receivers happens to participate in the same rounds as the target. In this case, the algorithm won't be able to
+distinguish between non-target and target friends as they'll all have been sent the same amount of messages during the same
+mixing rounds.
 """
