@@ -38,21 +38,28 @@ def to_challenge(elements):
     return Bn.from_binary(Chash)
 
 #####################################################
-# TASK 1 -- Prove knowledge of a DH public key's 
+# TASK 1 -- Prove knowledge of a DH public key's
 #           secret.
 
 def proveKey(params, priv, pub):
-    """ Uses the Schnorr non-interactive protocols produce a proof 
+    """ Uses the Schnorr non-interactive protocols to produce a proof
         of knowledge of the secret priv such that pub = priv * g.
 
         Outputs: a proof (c, r)
                  c (a challenge)
                  r (the response)
-    """  
+
+        w = random()
+        W = g*w
+        c = Hash(g, W) (not hashing any m since proof is not used as signature)
+        r = w - c * priv
+    """
     (G, g, hs, o) = params
-    
-    ## YOUR CODE HERE:
-    
+
+    (w, W) = keyGen(params)
+    c = to_challenge([g, W])
+    r = (w - c * priv) % o
+
     return (c, r)
 
 def verifyKey(params, pub, proof):
@@ -61,15 +68,15 @@ def verifyKey(params, pub, proof):
     """
     (G, g, hs, o) = params
     c, r = proof
-    gw_prime  = c * pub + r * g 
+    gw_prime  = c * pub + r * g
     return to_challenge([g, gw_prime]) == c
 
 #####################################################
-# TASK 2 -- Prove knowledge of a Discrete Log 
+# TASK 2 -- Prove knowledge of a Discrete Log
 #           representation.
 
 def commit(params, secrets):
-    """ Produces a commitment C = r * g + Sum xi * hi, 
+    """ Produces a commitment C = r * g + Sum xi * hi,
         where secrets is a list of xi of length 4.
         Returns the commitment (C) and the opening (r).
     """
@@ -81,17 +88,23 @@ def commit(params, secrets):
     return (C, r)
 
 def proveCommitment(params, C, r, secrets):
-    """ Prove knowledge of the secrets within a commitment, 
+    """ Prove knowledge of the secrets within a commitment,
         as well as the opening of the commitment.
 
-        Args: C (the commitment), r (the opening of the 
+        Args: C (the commitment), r (the opening of the
                 commitment), and secrets (a list of secrets).
         Returns: a challenge (c) and a list of responses.
     """
-    (G, g, (h0, h1, h2, h3), o) = params
-    x0, x1, x2, x3 = secrets
+    (G, g, hs, o) = params
 
-    ## YOUR CODE HERE:
+    randoms = [o.random() for _ in range(4)]
+    r_w = o.random()
+    W = sum([h.pt_mul(w) for h, w in zip(hs, randoms)], g.pt_mul(r_w))
+
+    c = to_challenge([g] + hs + [W])
+
+    responses = [(w - c * s) % o for s, w in zip(secrets, randoms)]
+    responses.append((r_w - r * c) % o)
 
     return (c, responses)
 
@@ -118,10 +131,10 @@ def gen2Keys(params):
     K = x * g
     L = x * h0
 
-    return (x, K, L)    
+    return (x, K, L)
 
 def proveDLEquality(params, x, K, L):
-    """ Generate a ZK proof that two public keys K, L have the same secret private key x, 
+    """ Generate a ZK proof that two public keys K, L have the same secret private key x,
         as well as knowledge of this private key. """
     (G, g, (h0, h1, h2, h3), o) = params
     w = o.random()
@@ -134,20 +147,21 @@ def proveDLEquality(params, x, K, L):
     return (c, r)
 
 def verifyDLEquality(params, K, L, proof):
-    """ Return whether the verification of equality of two discrete logarithms succeeded. """ 
+    """ Return whether the verification of equality of two discrete logarithms succeeded. """
     (G, g, (h0, h1, h2, h3), o) = params
     c, r = proof
 
-    ## YOUR CODE HERE:
+    Kw = r * g + c * K
+    Lw = r * h0 + c * L
 
-    return # YOUR RETURN HERE
+    return to_challenge([g, h0, Kw, Lw]) == c
 
 #####################################################
-# TASK 4 -- Prove correct encryption and knowledge of 
+# TASK 4 -- Prove correct encryption and knowledge of
 #           a plaintext.
 
 def encrypt(params, pub, m):
-    """ Encrypt a message m under a public key pub. 
+    """ Encrypt a message m under a public key pub.
         Returns both the randomness and the ciphertext.
     """
     (G, g, (h0, h1, h2, h3), o) = params
@@ -155,27 +169,44 @@ def encrypt(params, pub, m):
     return k, (k * g, k * pub + m * h0)
 
 def proveEnc(params, pub, Ciphertext, k, m):
-    """ Prove in ZK that the ciphertext is well formed 
+    """ Prove in ZK that the ciphertext is well formed
         and knowledge of the message encrypted as well.
 
         Return the proof: challenge and the responses.
-    """ 
+    """
     (G, g, (h0, h1, h2, h3), o) = params
+
+    # a = g * k, b = k * pub + m * h0
     a, b = Ciphertext
 
-    ## YOUR CODE HERE:
+    # Proof Bob knows k
+    ran_k = o.random()
+    Wk = ran_k * g
+
+    # Proof Bob encrypted message correctly. Using ran_k for pub
+    # since it is multiplied by k in the encryption stage
+    ran_m = o.random()
+    Wm_pub = ran_m * h0 + ran_k * pub
+
+    # a = Ck, b = Cm + Cpub
+    c = to_challenge([g, h0, pub, a, b, Wk, Wm_pub])
+
+    rk = (ran_k - c * k) % o
+    rm = (ran_m - c * m) % o
 
     return (c, (rk, rm))
 
 def verifyEnc(params, pub, Ciphertext, proof):
     """ Verify the proof of correct encryption and knowledge of a ciphertext. """
     (G, g, (h0, h1, h2, h3), o) = params
-    a, b = Ciphertext    
+    a, b = Ciphertext
     (c, (rk, rm)) = proof
 
-    ## YOUR CODE HERE:
+    # Calculate (r_i * g_i) + (c * C_i)
+    Wk = rk * g + c * a
+    Wm_pub = (rm * h0 + rk * pub) + c * b
 
-    return ## YOUR RETURN HERE
+    return to_challenge([g, h0, pub, a, b, Wk, Wm_pub]) == c
 
 
 #####################################################
@@ -184,7 +215,7 @@ def verifyEnc(params, pub, Ciphertext, proof):
 
 def relation(params, x1):
     """ Returns a commitment C to x0 and x1, such that x0 = 10 x1 + 20,
-        as well as x0, x1 and the commitment opening r. 
+        as well as x0, x1 and the commitment opening r.
     """
     (G, g, (h0, h1, h2, h3), o) = params
     r = o.random()
@@ -198,17 +229,40 @@ def prove_x0eq10x1plus20(params, C, x0, x1, r):
     """ Prove C is a commitment to x0 and x1 and that x0 = 10 x1 + 20. """
     (G, g, (h0, h1, h2, h3), o) = params
 
-    ## YOUR CODE HERE:
+    # Prove r, so the commitment
+    wr = o.random()
+    Wr = wr * g
 
-    return ## YOUR RETURN HERE
+    # Prove x1
+    wx1 = o.random()
+    Wx1 = wx1 * h1
+
+    # Prove x0 and its linear relation to x1 via Cx0 + -d * h0 = wx1 * d * h0
+    Wx0 = wx1 * (10 * h0)
+
+    c = to_challenge([C, g, h0, h1, Wr + Wx0 + Wx1])
+
+    # x0 doesn't need r because it uses wx1 for its Wx0
+    r_r = (wr - c * r) % o
+    r_x1 = (wx1 - c * x1) % o
+
+    return (c, (r_r, r_x1))
 
 def verify_x0eq10x1plus20(params, C, proof):
     """ Verify that proof of knowledge of C and x0 = 10 x1 + 20. """
     (G, g, (h0, h1, h2, h3), o) = params
 
-    ## YOUR CODE HERE:
+    (c, (r_r, r_x1)) = proof
 
-    return ## YOUR RETURN HERE
+    # Calculate sum(r_i * g_i)
+    rg = r_r * g + r_x1 * 10 * h0 + r_x1 * h1
+
+    # Take care of Cx0 + (-d * h0)
+    cC = c * (C + (-20 * h0))
+
+    W = rg + cC
+
+    return to_challenge([C, g, h0, h1, W]) == c
 
 #####################################################
 # TASK 6 -- (OPTIONAL) Prove that a ciphertext is either 0 or 1
@@ -218,7 +272,7 @@ def binencrypt(params, pub, m):
     """ Encrypt a binary value m under public key pub """
     assert m in [0, 1]
     (G, g, (h0, h1, h2, h3), o) = params
-    
+
     k = o.random()
     return k, (k * g, k * pub + m * h0)
 
@@ -241,38 +295,52 @@ def test_bin_incorrect():
 #####################################################
 # TASK Q1 - Answer the following question:
 #
-# The interactive Schnorr protocol (See PETs Slide 8) offers 
-# "plausible deniability" when performed with an 
-# honest verifier. The transcript of the 3 step interactive 
-# protocol could be simulated without knowledge of the secret 
-# (see Slide 12). Therefore the verifier cannot use it to prove 
-# to a third party that the holder of secret took part in the 
+# The interactive Schnorr protocol (See PETs Slide 8) offers
+# "plausible deniability" when performed with an
+# honest verifier. The transcript of the 3 step interactive
+# protocol could be simulated without knowledge of the secret
+# (see Slide 12). Therefore the verifier cannot use it to prove
+# to a third party that the holder of secret took part in the
 # protocol acting as the prover.
 #
-# Does "plausible deniability" hold against a dishonest verifier 
-# that  deviates from the Schnorr identification protocol? Justify 
+# Does "plausible deniability" hold against a dishonest verifier
+# that  deviates from the Schnorr identification protocol? Justify
 # your answer by describing what a dishonest verifier may do.
 
-""" TODO: Your answer here. """
+"""
+Plausible deniability in Schnorr is achieved thanks to the indistinguishability relation
+between forged transcripts and real ones originated from a correct run of the
+protocol. This is because the probability distributions of original and forged
+transcripts are identical (the probability of generating a certain Schnorr triplet (W, c, r)
+is the same regardless of the whether a concrete secret x has been used or not). However, this assumes
+that the verifier is honest, and so it uses random values for the challenges sent
+to the prover. If that is not the case, and the verifier sends non-random challenges,
+the probability distribution of real runs of the protocol will not be the same as
+the one of forged transcripts. Therefore, plausible deniability will be broken.
+"""
 
 #####################################################
 # TASK Q2 - Answer the following question:
 #
-# Consider the function "prove_something" below, that 
+# Consider the function "prove_something" below, that
 # implements a zero-knowledge proof on commitments KX
 # and KY to x and y respectively. Note that the prover
-# only knows secret y. What statement is a verifier, 
+# only knows secret y. What statement is a verifier,
 # given the output of this function, convinced of?
 #
 # Hint: Look at "test_prove_something" too.
 
-""" TODO: Your answer here. """
+"""
+A verifier is convinced that that prover knows about the commitments KX and KY as
+well as both x and y. However, this is not true since the prover doesn't
+in fact know about x.
+"""
 
 def prove_something(params, KX, KY, y):
     (G, g, _, o) = params
 
     # Simulate proof for KX
-    # r = wx - cx => g^w = g^r * KX^c 
+    # r = wx - cx => g^w = g^r * KX^c
     rx = o.random()
     c1 = o.random()
     W_KX = rx * g + c1 * KX
@@ -309,4 +377,3 @@ def test_prove_something():
     W_KY = ry * g + c2 * KY
     c = to_challenge([g, KX, KY, W_KX, W_KY])
     assert c % o == (c1 + c2) % o
-
